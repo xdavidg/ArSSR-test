@@ -3,7 +3,9 @@ data/
 data.zip
 log/
 model/
-model_15/
+marmo_dataset/
+hr_test_images/
+test/
 
 # Python
 *__pycache__/
