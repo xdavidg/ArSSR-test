@@ -1,9 +1,10 @@
 # -*- coding:utf-8 -*-
 # -----------------------------------------
-#   Filename: train.py
+#   Filename: train_custom.py
 #   Author  : Qing Wu
 #   Email   : wuqing@shanghaitech.edu.cn
 #   Date    : 2021/9/19
+#   Modified: Added RC augmentation integration
 # -----------------------------------------
 import data
 import torch
@@ -11,6 +12,7 @@ import model
 import argparse
 import time
 from torch.utils.tensorboard import SummaryWriter
+from FullRC import RCContrastAugmentationWithNonLinearity
 
 if __name__ == "__main__":
 
@@ -110,6 +112,29 @@ if __name__ == "__main__":
         "-gpu", type=int, default=0, dest="gpu", help="the number of GPU"
     )
 
+    # Add RC augmentation parameters
+    parser.add_argument(
+        "-rc_layers",
+        type=int,
+        default=4,
+        dest="rc_layers",
+        help="number of random convolution layers for augmentation",
+    )
+    parser.add_argument(
+        "-rc_kernel_size",
+        type=int,
+        default=1,
+        dest="rc_kernel_size",
+        help="kernel size for random convolution layers",
+    )
+    parser.add_argument(
+        "-rc_negative_slope",
+        type=float,
+        default=0.2,
+        dest="rc_negative_slope",
+        help="negative slope for LeakyReLU in RC layers",
+    )
+
     args = parser.parse_args()
     encoder_name = args.encoder_name
     decoder_depth = args.decoder_depth
@@ -124,6 +149,9 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     sample_size = args.sample_size
     gpu = args.gpu
+    rc_layers = args.rc_layers
+    rc_kernel_size = args.rc_kernel_size
+    rc_negative_slope = args.rc_negative_slope
 
     # -----------------------
     # display parameters
@@ -146,6 +174,10 @@ if __name__ == "__main__":
     print("decoder feature_dim: {}".format(feature_dim))
     print("decoder depth: {}".format(decoder_depth))
     print("decoder width: {}".format(decoder_width))
+    print("------------RC Augmentation-----------")
+    print("rc_layers: {}".format(rc_layers))
+    print("rc_kernel_size: {}".format(rc_kernel_size))
+    print("rc_negative_slope: {}".format(rc_negative_slope))
     for i in range(5):
         print(i + 1, end="s,")
         time.sleep(1)
@@ -178,6 +210,13 @@ if __name__ == "__main__":
     loss_fun = torch.nn.L1Loss()
     optimizer = torch.optim.Adam(params=ArSSR.parameters(), lr=lr)
 
+    # Initialize RC augmentation
+    rc_augmentation = RCContrastAugmentationWithNonLinearity(
+        num_layers=rc_layers,
+        kernel_size=rc_kernel_size,
+        negative_slope=rc_negative_slope
+    ).to(DEVICE)
+
     # -----------------------
     # training & validation
     # -----------------------
@@ -185,8 +224,11 @@ if __name__ == "__main__":
         ArSSR.train()
         loss_train = 0
         for i, (img_lr, xyz_hr, img_hr) in enumerate(train_loader):
-            # forward
+            # Apply RC augmentation to input
             img_lr = img_lr.unsqueeze(1).to(DEVICE).float()  # N×1×h×w×d
+            # Apply random convolution augmentation
+            img_lr = rc_augmentation(img_lr)
+
             img_hr = (
                 img_hr.to(DEVICE).float().view(batch_size, -1).unsqueeze(-1)
             )  # N×K×1 (K Equ. 3)
@@ -200,11 +242,6 @@ if __name__ == "__main__":
             # record and print loss
             loss_train += loss.item()
             current_lr = optimizer.state_dict()["param_groups"][0]["lr"]
-            # print(
-            #     "(TRAIN) Epoch[{}/{}], Steps[{}/{}], Lr:{}, Loss:{:.10f}".format(
-            #         e + 1, epoch, i + 1, len(train_loader), current_lr, loss.item()
-            #     )
-            # )
 
         writer.add_scalar("MES_train", loss_train / len(train_loader), e + 1)
         # release memory
