@@ -6,6 +6,8 @@ model/
 marmo_dataset/
 hr_test_images/
 test/
+RC_data/
+normalized_images/
 
 # Python
 *__pycache__/

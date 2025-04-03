@@ -7,11 +7,6 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 
-def create_directories():
-    """Create input and output directories if they don't exist."""
-    Path("RC_data/input").mkdir(parents=True, exist_ok=True)
-    Path("RC_data/output").mkdir(parents=True, exist_ok=True)
-
 
 def load_nifti(file_path):
     """Load a NIfTI file and return the data as a numpy array."""
@@ -58,9 +53,16 @@ def process_image(input_path, output_path, rc_augmentation, device):
     # Load the NIfTI image
     nifti_img = nib.load(input_path)
     data = nifti_img.get_fdata()
+    
+    # Store original min and max for denormalization if needed
+    original_min = data.min()
+    original_max = data.max()
+    
+    # Normalize data to [0,1] range
+    data_normalized = (data - original_min) / (original_max - original_min)
 
     # Convert to torch tensor and add batch and channel dimensions
-    data_tensor = torch.from_numpy(data).unsqueeze(
+    data_tensor = torch.from_numpy(data_normalized).unsqueeze(
         0).unsqueeze(0).float().to(device)
 
     # Apply RC augmentation
@@ -69,25 +71,32 @@ def process_image(input_path, output_path, rc_augmentation, device):
 
     # Convert back to numpy and remove the extra dimensions
     augmented_data = augmented_data.squeeze().cpu().numpy()
+    
+    # Clip values to ensure they stay in [0,1] range
+    augmented_data = np.clip(augmented_data, 0, 1)
+    
+    # Optional: Denormalize back to original range
+    # Uncomment the following line if you want to restore original intensity range
+    # augmented_data = augmented_data * (original_max - original_min) + original_min
 
     # Save the augmented data
     save_nifti(augmented_data, output_path, nifti_img)
 
     # Visualize middle slice
-    middle_slice = data.shape[0] // 2
+    middle_slice = data_normalized.shape[0] // 2
     visualize_slice(
-        data,
+        data_normalized,
         augmented_data,
         middle_slice,
         output_path.replace('.nii.gz', '_comparison.png')
     )
 
-    return data, augmented_data
+    return data_normalized, augmented_data
 
 
 def main():
-    # Create directories
-    create_directories()
+    # Create output directory if it doesn't exist
+    os.makedirs("RC_data/output", exist_ok=True)
 
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -109,10 +118,14 @@ def main():
             print(f"Processing {filename}...")
 
             input_path = os.path.join(input_dir, filename)
-            output_path = os.path.join(output_dir, filename)
+            
+            # Add "_rc" to the output filename
+            base_name = os.path.splitext(os.path.splitext(filename)[0])[0]  # Remove both .nii and .gz extensions
+            output_filename = f"{base_name}_rc.nii.gz"
+            output_path = os.path.join(output_dir, output_filename)
 
             try:
-                data, augmented_data = process_image(
+                data_normalized, augmented_data = process_image(
                     input_path,
                     output_path,
                     rc_augmentation,
@@ -120,11 +133,11 @@ def main():
                 )
 
                 # Print some statistics
-                print(f"Input range: [{data.min():.3f}, {data.max():.3f}]")
+                print(f"Input range (normalized): [{data_normalized.min():.3f}, {data_normalized.max():.3f}]")
                 print(
                     f"Output range: [{augmented_data.min():.3f}, {augmented_data.max():.3f}]")
                 print(
-                    f"Mean difference: {np.mean(np.abs(augmented_data - data)):.3f}")
+                    f"Mean difference: {np.mean(np.abs(augmented_data - data_normalized)):.3f}")
 
             except Exception as e:
                 print(f"Error processing {filename}: {str(e)}")
