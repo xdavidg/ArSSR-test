@@ -87,15 +87,11 @@ if __name__ == '__main__':
     train_path = os.path.join(config['processed_data_path'], 'train')
     os.makedirs(train_path, exist_ok=True)
     for f in train_files:
-        # Create a temporary directory for this file's patches
-        temp_dir = os.path.join(train_path, f.split('.')[0])
-        os.makedirs(temp_dir, exist_ok=True)
-
         # Process the file
         create_patches(
             # Pass the directory containing the file
             input_path=config['raw_data_path'],
-            output_path=temp_dir,
+            output_path=train_path,
             patch_size=config['patch_size'],
             patches_per_image=config['patches_per_image'],
             margin=config['margin']
@@ -105,15 +101,11 @@ if __name__ == '__main__':
     val_path = os.path.join(config['processed_data_path'], 'val')
     os.makedirs(val_path, exist_ok=True)
     for f in val_files:
-        # Create a temporary directory for this file's patches
-        temp_dir = os.path.join(val_path, f.split('.')[0])
-        os.makedirs(temp_dir, exist_ok=True)
-
         # Process the file
         create_patches(
             # Pass the directory containing the file
             input_path=config['raw_data_path'],
-            output_path=temp_dir,
+            output_path=val_path,
             patch_size=config['patch_size'],
             patches_per_image=config['patches_per_image'],
             margin=config['margin']
@@ -123,15 +115,11 @@ if __name__ == '__main__':
     test_path = os.path.join(config['processed_data_path'], 'test')
     os.makedirs(test_path, exist_ok=True)
     for f in test_files:
-        # Create a temporary directory for this file's patches
-        temp_dir = os.path.join(test_path, f.split('.')[0])
-        os.makedirs(temp_dir, exist_ok=True)
-
         # Process the file
         create_patches(
             # Pass the directory containing the file
             input_path=config['raw_data_path'],
-            output_path=temp_dir,
+            output_path=test_path,
             patch_size=config['patch_size'],
             patches_per_image=config['patches_per_image'],
             margin=config['margin']
